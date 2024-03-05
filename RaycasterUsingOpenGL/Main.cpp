@@ -206,24 +206,26 @@ void drawPlayer()
 
 float distance(float x1, float y1, float x2, float y2, float angle)
 {
-	return cos(toRadian(angle)) * (x2 - x1) - sin(toRadian(y2 - y1)) * (y2 - y1);
+	//return cos(toRadian(angle)) * (x2 - x1) - sin(toRadian(angle)) * (y2 - y1);
+	return sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
 }
 
 void drawRays()
 {
 	int mx, my, mp, dof, side; float vx, vy, rx, ry, ra, yOff, xOff, Tan, aTan, disV, disH;
-	ra = pa;  rx = 0.0f; ry = 0.0f; xOff = 0.0f; yOff = 0.0f; disH = 0.0f; disV = 0.0f;
-	for (int r = 0; r < 1; r++)
+	ra = pa;  rx = 0.0f; ry = 0.0f; xOff = 0.0f; yOff = 0.0f;
+	ra = fixAngle(pa + 30);
+	for (int r = 0; r < 60; r++)
 	{
 		/*
 		 * Checking Verticals
 		 */
-		dof = 0;
+		dof = 0; disV = 10000000;
 		Tan = tan(toRadian(ra));
-		if (cos(toRadian(ra)) > 0.0001) { rx = (((int)px >> 6) << 6) + 64; ry = (rx - px) * Tan + py; xOff = 64; yOff = xOff * Tan; }//looking left
-		else if (cos(toRadian(ra)) < -0.0001) { rx = (((int)px >> 6) << 6) - 0.0001f; ry = (rx - px) * Tan + py; xOff = -64; yOff = xOff * Tan;	}//looking right
-		else { rx = px; ry = py; dof = 8; }                                                  //looking up or down. no hit  
-		while (dof < 8)
+		if (cos(toRadian(ra)) > 0.0001f) { rx = (((int)px >> 6) << 6) + 64; ry = (rx - px) * Tan + py; xOff = 64; yOff = xOff * Tan; }//looking left
+		else if (cos(toRadian(ra)) < -0.0001f) { rx = (((int)px >> 6) << 6) - 0.0001f; ry = (rx - px) * Tan + py; xOff = -64; yOff = xOff * Tan;	}//looking right
+		else { rx = px; ry = py; dof = mapX; }                                                  //looking up or down. no hit  
+		while (dof < mapX)
 		{
 			/* 
 			 * DEBUG HELL: mp was messing everything up because the mp index was calculated based on(0, 0)
@@ -231,43 +233,53 @@ void drawRays()
 			 * axis for legibility.  Just needed to invert the Y axis (-1 because indexing starts at 0).
 			 */
 			mx = (int)(rx) >> 6; my = (int)(ry) >> 6; mp = (mapY - my - 1) * mapX + mx;
-			if (mp > 0 && mp < mapX * mapY && map[mp] == 1) { dof = 8; disV = distance(px, py, rx, ry, ra); }//hit         
+			if (mp > 0 && mp < mapX * mapY && map[mp] == 1) { dof = mapX; disV = distance(px, py, rx, ry, ra); }//hit         
 			else { rx += xOff; ry += yOff; dof += 1; }                                               //check next vertical
 		}
 		vx = rx; vy = ry;
 		/*
 		 * Checking horizontals
 		 */
-		dof = 0;
+		dof = 0; disH = 100000000;
 		aTan = 1.0f / Tan;
 		if (sin(toRadian(ra)) > 0.0001f) { ry = (((int)(py) >> 6) << 6) + 64; rx = (ry - py) * aTan + px; yOff = 64; xOff = yOff * aTan; }
 		else if (sin(toRadian(ra)) < -0.0001f) { ry = (((int)(py) >> 6) << 6) - 0.0001f; rx = (ry - py) * aTan + px; yOff = -64; xOff = yOff * aTan; }
 		else { rx = px; ry = py; dof = 8; }
-		while (dof < 8)
+		while (dof < mapY)
 		{
 			mx = (int)(rx) >> 6; my = (int)(ry) >> 6; mp = (mapY - my - 1) * mapX + mx;
-			if (mp > 0 && mp < mapX * mapY && map[mp] == 1) { dof = 8; disH = distance(px, py, rx, ry, ra); }//hit         
+			if (mp > 0 && mp < mapX * mapY && map[mp] == 1) { dof = mapY; disH = distance(px, py, rx, ry, ra); }//hit         
 			else { rx += xOff; ry += yOff; dof += 1; }                                               //check next horizontal
 		}
 
-		if (disV < disH) { rx = vx; ry = vy; }
+		if (disV - disH < 0.000000001) { rx = vx; ry = vy; disH = disV; }
+
+		/*
+		 * Drawing Walls
+		 */
+		
+		int ca = fixAngle(pa - ra); disH = disH * cos(toRadian(ca));			// fix fisheye
+		int lineH = (mapS * 320) / disH; if (lineH > 320) { lineH = 320; }		// line height with limit
+		int lineOff = 160 - (lineH >> 1);										// line offset
 
 		GLfloat vertices[] =
 		{
-			pixelToVertex(px, 0), pixelToVertex(py, 1), 1.0f,	1.0f, 0.0f, 0.0f,
-			pixelToVertex(rx, 0), pixelToVertex(ry, 1), 1.0f,	1.0f, 0.0f, 0.0f
+			pixelToVertex(r * 8 + 530, 0), pixelToVertex(lineOff, 1), 1.0f,	1.0f, 1.0f, 0.0f,
+			pixelToVertex(r * 8 + 530, 0), pixelToVertex(lineOff + lineH, 1), 1.0f,	1.0f, 1.0f, 0.0f
 		};
 
-		VAO VAO1;
-		VAO1.Bind();
-		VBO VBO1(vertices, sizeof(vertices));
-		VAO1.LinkAttrib(VBO1, 0, 3, GL_FLOAT, 6 * sizeof(float), (void*)0);
-		VAO1.LinkAttrib(VBO1, 1, 3, GL_FLOAT, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-		VBO1.Unbind();
-		glLineWidth(1);
-		glDrawArrays(GL_LINES, 0, 2);
-		VAO1.Unbind();
-		VAO1.Delete(); VBO1.Delete();
+		VAO VAO1; 
+		VAO1.Bind(); 
+		VBO VBO1(vertices, sizeof(vertices)); 
+		VAO1.LinkAttrib(VBO1, 0, 3, GL_FLOAT, 6 * sizeof(float), (void*)0); 
+		VAO1.LinkAttrib(VBO1, 1, 3, GL_FLOAT, 6 * sizeof(float), (void*)(3 * sizeof(float))); 
+		VBO1.Unbind(); 
+		glLineWidth(8); 
+		glDrawArrays(GL_LINES, 0, 2); 
+		VAO1.Unbind(); 
+		VAO1.Delete(); VBO1.Delete(); 
+
+		ra = fixAngle(ra - 1);
 	}
 }
 
