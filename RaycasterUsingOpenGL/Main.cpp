@@ -20,24 +20,18 @@ const int WINDOW_WIDTH = 1024, WINDOW_HEIGHT = 512;
 const float PI = 3.14159265359f;
 
 /*
- * Global Variables
- */
-
-//Shader shaderProgram("default.vert", "default.frag");
-
-/*
  * Map
  */
 
 // Map constants
 
-const int mapX = 8, mapY = 8, mapS = 64;
-const int map[] =
+int mapX = 8, mapY = 8, mapS = 64;
+int map[] =
 {
 	1, 1, 1, 1, 1, 1, 1, 1,
 	1, 0, 1, 0, 0, 0, 0, 1,
-	1, 0, 1, 0, 0, 1, 0, 1,
-	1, 0, 1, 0, 0, 1, 0, 1,
+	1, 0, 1, 0, 0, 0, 0, 1,
+	1, 0, 1, 0, 0, 0, 0, 1,
 	1, 0, 0, 0, 0, 0, 0, 1,
 	1, 0, 0, 0, 0, 1, 0, 1,
 	1, 0, 0, 0, 0, 0, 0, 1,
@@ -147,22 +141,18 @@ void movePlayer(GLFWwindow* window)
 {
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 	{
-		//px += pdx * 2; py += pdy * 2;
 		px += pdx; py += pdy;
 	}
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
 	{
-		//pa -= 5;  pa = fixAngle(pa); pdx = cos(toRadian(pa)); pdx = -sin(toRadian(pa));
 		pa += 1; pa = fixAngle(pa); pdx = cos(toRadian(pa)); pdy = sin(toRadian(pa));
 	}
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
 	{
-		//px -= pdx * 2; py -= pdy * 2;
 		px -= pdx; py -= pdy;
 	}
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 	{
-		//pa += 5; pa = fixAngle(pa); pdx = cos(toRadian(pa)); pdx = -sin(toRadian(pa));
 		pa -= 1; pa = fixAngle(pa); pdx = cos(toRadian(pa)); pdy = sin(toRadian(pa));
 	}
 }
@@ -187,7 +177,6 @@ void drawPlayer()
 	// Unbind all to prevent accidentally modifying them
 	playerVBO.Unbind();
 
-	// Draw primitives, number of indices, datatype of indices, index of indices
 	glDrawArrays(GL_POINTS, 0, 1);
 	playerVAO.Unbind();
 	playerVAO.Delete(); playerVBO.Delete();
@@ -205,10 +194,83 @@ void drawPlayer()
 	VBO playerLine(vertices, sizeof(vertices));
 	VAO1.LinkAttrib(playerLine, 0, 2, GL_FLOAT, 2 * sizeof(float), (void*)0);
 	playerLine.Unbind();
+	glLineWidth(1);
 	glDrawArrays(GL_LINES, 0, 2);
 	VAO1.Unbind();
 	VAO1.Delete(); playerLine.Delete();
 }
+
+/*
+ * Drawing the rays
+ */
+
+float distance(float x1, float y1, float x2, float y2, float angle)
+{
+	return cos(toRadian(angle)) * (x2 - x1) - sin(toRadian(y2 - y1)) * (y2 - y1);
+}
+
+void drawRays()
+{
+	int mx, my, mp, dof, side; float vx, vy, rx, ry, ra, yOff, xOff, Tan, aTan, disV, disH;
+	ra = pa;  rx = 0.0f; ry = 0.0f; xOff = 0.0f; yOff = 0.0f; disH = 0.0f; disV = 0.0f;
+	for (int r = 0; r < 1; r++)
+	{
+		/*
+		 * Checking Verticals
+		 */
+		dof = 0;
+		Tan = tan(toRadian(ra));
+		if (cos(toRadian(ra)) > 0.0001) { rx = (((int)px >> 6) << 6) + 64; ry = (rx - px) * Tan + py; xOff = 64; yOff = xOff * Tan; }//looking left
+		else if (cos(toRadian(ra)) < -0.0001) { rx = (((int)px >> 6) << 6) - 0.0001f; ry = (rx - px) * Tan + py; xOff = -64; yOff = xOff * Tan;	}//looking right
+		else { rx = px; ry = py; dof = 8; }                                                  //looking up or down. no hit  
+		while (dof < 8)
+		{
+			/* 
+			 * DEBUG HELL: mp was messing everything up because the mp index was calculated based on(0, 0)
+			 * being the bottom left corner of the map, when in reality the array is designed with a flipped Y 
+			 * axis for legibility.  Just needed to invert the Y axis (-1 because indexing starts at 0).
+			 */
+			mx = (int)(rx) >> 6; my = (int)(ry) >> 6; mp = (mapY - my - 1) * mapX + mx;
+			if (mp > 0 && mp < mapX * mapY && map[mp] == 1) { dof = 8; disV = distance(px, py, rx, ry, ra); }//hit         
+			else { rx += xOff; ry += yOff; dof += 1; }                                               //check next vertical
+		}
+		vx = rx; vy = ry;
+		/*
+		 * Checking horizontals
+		 */
+		dof = 0;
+		aTan = 1.0f / Tan;
+		if (sin(toRadian(ra)) > 0.0001f) { ry = (((int)(py) >> 6) << 6) + 64; rx = (ry - py) * aTan + px; yOff = 64; xOff = yOff * aTan; }
+		else if (sin(toRadian(ra)) < -0.0001f) { ry = (((int)(py) >> 6) << 6) - 0.0001f; rx = (ry - py) * aTan + px; yOff = -64; xOff = yOff * aTan; }
+		else { rx = px; ry = py; dof = 8; }
+		while (dof < 8)
+		{
+			mx = (int)(rx) >> 6; my = (int)(ry) >> 6; mp = (mapY - my - 1) * mapX + mx;
+			if (mp > 0 && mp < mapX * mapY && map[mp] == 1) { dof = 8; disH = distance(px, py, rx, ry, ra); }//hit         
+			else { rx += xOff; ry += yOff; dof += 1; }                                               //check next horizontal
+		}
+
+		if (disV < disH) { rx = vx; ry = vy; }
+
+		GLfloat vertices[] =
+		{
+			pixelToVertex(px, 0), pixelToVertex(py, 1), 1.0f,	1.0f, 0.0f, 0.0f,
+			pixelToVertex(rx, 0), pixelToVertex(ry, 1), 1.0f,	1.0f, 0.0f, 0.0f
+		};
+
+		VAO VAO1;
+		VAO1.Bind();
+		VBO VBO1(vertices, sizeof(vertices));
+		VAO1.LinkAttrib(VBO1, 0, 3, GL_FLOAT, 6 * sizeof(float), (void*)0);
+		VAO1.LinkAttrib(VBO1, 1, 3, GL_FLOAT, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+		VBO1.Unbind();
+		glLineWidth(1);
+		glDrawArrays(GL_LINES, 0, 2);
+		VAO1.Unbind();
+		VAO1.Delete(); VBO1.Delete();
+	}
+}
+
 
 /*
  * Display functions
@@ -273,6 +335,7 @@ int main()
 		drawMap();
 		movePlayer(window);
 		drawPlayer();
+		drawRays();
 		// Swap the back buffer with the front buffer
 		glfwSwapBuffers(window);
 		// Take care of all GLFW events
