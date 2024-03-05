@@ -29,7 +29,7 @@ int mapX = 8, mapY = 8, mapS = 64;
 int map[] =
 {
 	1, 1, 1, 1, 1, 1, 1, 1,
-	1, 0, 1, 0, 0, 0, 0, 1,
+	1, 0, 1, 0, 0, 1, 0, 1,
 	1, 0, 1, 0, 0, 0, 0, 1,
 	1, 0, 1, 0, 0, 0, 0, 1,
 	1, 0, 0, 0, 0, 0, 0, 1,
@@ -139,22 +139,40 @@ float px, py, pdx, pdy, pa;
 
 void movePlayer(GLFWwindow* window)
 {
+	/*
+	 * Rotation keys (D and A)
+	 */
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) 
+	{
+		pa -= 1; pa = fixAngle(pa); pdx = cos(toRadian(pa)); pdy = sin(toRadian(pa)); 
+	}
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) 
+	{
+		pa += 1; pa = fixAngle(pa); pdx = cos(toRadian(pa)); pdy = sin(toRadian(pa)); 
+	}
+
+	/*
+	 * Movement keys (W and S)
+	 */
+	int xOff, yOff;
+	if (pdx > 0) { xOff = 20; } else { xOff = -20; }
+	// there is a flip because of the Y coordinates
+	if (pdy > 0) { yOff = 20; } else { yOff = -20; }
+	int pxLoc = px / 64, pxAddOffLoc = (px + xOff) / 64, pxSubOffLoc = (px - xOff) / 64;
+	// This is due to the flipped Y coord of the map (This should probably be done differently in the future)
+	int pyLoc = 8 - (py / 64), pyAddOffLoc = 8 - (py + yOff) / 64, pySubOffLoc = 8 - (py - yOff) / 64;
+
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 	{
-		px += pdx; py += pdy;
-	}
-	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-	{
-		pa += 1; pa = fixAngle(pa); pdx = cos(toRadian(pa)); pdy = sin(toRadian(pa));
+		if (map[pyLoc * mapX + pxAddOffLoc] == 0) { px += pdx; }	// if map index in x direction is 0, move
+		if (map[pyAddOffLoc * mapX + pxLoc] == 0) { py += pdy; }	// if map index in y direction is 0, move
 	}
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
 	{
-		px -= pdx; py -= pdy;
+		if (map[pyLoc * mapX + pxSubOffLoc] == 0) { px -= pdx; }	// if map index in x direction is 0, move
+		if (map[pySubOffLoc * mapX + pxLoc] == 0) { py -= pdy; }	// if map index in y direction is 0, move
 	}
-	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-	{
-		pa -= 1; pa = fixAngle(pa); pdx = cos(toRadian(pa)); pdy = sin(toRadian(pa));
-	}
+	
 }
 
 void drawPlayer()
@@ -212,8 +230,8 @@ float distance(float x1, float y1, float x2, float y2, float angle)
 
 void drawRays()
 {
-	int mx, my, mp, dof, side; float vx, vy, rx, ry, ra, yOff, xOff, Tan, aTan, disV, disH;
-	ra = pa;  rx = 0.0f; ry = 0.0f; xOff = 0.0f; yOff = 0.0f;
+	int mx, my, mp, dof, side; float vx, vy, rx, ry, ra, yOff, xOff, Tan, aTan, disV, disH, color;
+	ra = pa;  rx = 0.0f; ry = 0.0f; xOff = 0.0f; yOff = 0.0f; color = 0.7f;
 	ra = fixAngle(pa + 30);
 	for (int r = 0; r < 60; r++)
 	{
@@ -252,7 +270,28 @@ void drawRays()
 			else { rx += xOff; ry += yOff; dof += 1; }                                               //check next horizontal
 		}
 
-		if (disV - disH < 0.000000001) { rx = vx; ry = vy; disH = disV; }
+		if (disV - disH < 0.000000001) { rx = vx; ry = vy; disH = disV; color = 0.9f; }
+
+		/*
+		 * Drawing the Rays
+		 */
+		GLfloat line[] =
+		{
+			pixelToVertex(px, 0), pixelToVertex(py, 1), 1.0f,	1.0f, 0.0f, 0.0f,
+			pixelToVertex(rx, 0), pixelToVertex(ry, 1), 1.0f,	1.0f, 0.0f, 0.0f
+		};
+
+		VAO VAO2;
+		VAO2.Bind();
+		VBO VBO2(line, sizeof(line));
+		VAO2.LinkAttrib(VBO2, 0, 3, GL_FLOAT, 6 * sizeof(float), (void*)0);
+		VAO2.LinkAttrib(VBO2, 1, 3, GL_FLOAT, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+		VBO2.Unbind();
+		glLineWidth(1);
+		glDrawArrays(GL_LINES, 0, 2);
+		VAO2.Unbind();
+		VAO2.Delete(); VBO2.Delete();
+
 
 		/*
 		 * Drawing Walls
@@ -264,8 +303,8 @@ void drawRays()
 
 		GLfloat vertices[] =
 		{
-			pixelToVertex(r * 8 + 530, 0), pixelToVertex(lineOff, 1), 1.0f,	1.0f, 1.0f, 0.0f,
-			pixelToVertex(r * 8 + 530, 0), pixelToVertex(lineOff + lineH, 1), 1.0f,	1.0f, 1.0f, 0.0f
+			pixelToVertex(r * 8 + 530, 0), pixelToVertex(lineOff, 1), 1.0f,	color, 0.0f, 0.0f,
+			pixelToVertex(r * 8 + 530, 0), pixelToVertex(lineOff + lineH, 1), 1.0f,	color, 0.0f, 0.0f
 		};
 
 		VAO VAO1; 
@@ -291,7 +330,7 @@ void drawRays()
 void init()
 {
 	glClearColor(0.07f, 0.13f, 0.17f, 1.0f);
-	px = 150; py = 400; pa = 90;
+	px = 280; py = 100; pa = 90;
 	pdx = cos(toRadian(pa)); pdy = sin(toRadian(pa));
 }
 
